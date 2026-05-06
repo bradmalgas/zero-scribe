@@ -60,6 +60,44 @@ The first milestone is a working command-line prototype that can:
 4. Pass the transcript to a local LM Studio model.
 5. Write a clean Markdown note to disk.
 
+## Local Setup
+
+ZeroScribe is currently aimed at Apple Silicon Macs. The first prototype uses Python packages for audio capture, local Whisper transcription, and local LLM formatting, plus a system `ffmpeg` install for audio decoding.
+
+### Prerequisites
+
+- Homebrew
+- Python 3.11 or newer
+- `ffmpeg`
+- LM Studio, once note formatting is implemented
+
+Install the system audio dependency:
+
+```bash
+brew install ffmpeg
+```
+
+Verify that macOS can find it:
+
+```bash
+which ffmpeg
+ffmpeg -version
+```
+
+On Apple Silicon Macs, `which ffmpeg` will usually print `/opt/homebrew/bin/ffmpeg`.
+
+### Python Environment
+
+From a fresh clone of the repo:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install mlx-whisper sounddevice numpy scipy openai
+```
+
+The virtual environment contains the Python libraries. `ffmpeg` stays outside the virtual environment because it is a command-line program that those libraries call through the system `PATH`.
+
 ## Design Principles
 
 - Local by default: audio, transcripts, prompts, and generated notes should remain on the user's machine.

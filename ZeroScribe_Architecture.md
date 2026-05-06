@@ -132,6 +132,18 @@ Role: local LLM client.
 
 The `openai` SDK can be pointed at LM Studio's local OpenAI-compatible server. This lets the project use standard chat-completion request patterns while keeping the model execution on the local machine.
 
+### `ffmpeg`
+
+Role: local audio decoding and conversion.
+
+`ffmpeg` is a system command-line dependency rather than a Python package. Some audio and transcription libraries call the `ffmpeg` executable behind the scenes to read, decode, or convert media files before transcription. On macOS, install it with Homebrew:
+
+```bash
+brew install ffmpeg
+```
+
+If Python raises `FileNotFoundError: [Errno 2] No such file or directory: 'ffmpeg'`, the executable is missing or not available on the current shell `PATH`.
+
 ### BlackHole
 
 Role: system audio routing.
