@@ -1,20 +1,33 @@
 # ZeroScribe Architecture and Tech Stack
 
-This document describes the planned technical architecture for ZeroScribe: a local-first meeting scribe and dictation assistant for Apple Silicon Macs.
+This document describes the current technical architecture for ZeroScribe: a local-first meeting scribe and dictation assistant for Apple Silicon Macs.
 
 The core idea is to keep the audio pipeline simple and auditable. Audio is captured locally, serialized into a format the transcription model can read, transcribed by an MLX Whisper model, and then formatted by a local language model served through LM Studio.
 
-At this stage, the project is still being implemented. Treat this document as the architecture target for the first working prototype, not as a guarantee that every part already exists in the codebase.
+The first CLI pass is implemented in `main.py`. It supports listing input devices and running a fixed-duration record-to-notes batch pipeline.
 
 ## System Goals
 
-The first version of ZeroScribe should meet five practical goals:
+The current version of ZeroScribe is built around five practical goals:
 
 - Run without cloud transcription or hosted LLM APIs.
 - Work well on Apple Silicon by using MLX-backed models where possible.
-- Support microphone capture first, then system audio capture through a virtual audio driver.
+- Support microphone capture first, with system audio capture through a virtual audio driver left for a later setup guide.
 - Produce Markdown notes that are easier to read than a raw transcript.
 - Keep the implementation small enough for a developer to understand, debug, and replace piece by piece.
+
+## Current CLI Surface
+
+ZeroScribe exposes two commands:
+
+```bash
+python main.py list-devices
+python main.py record
+```
+
+`python main.py list-devices` loads `sounddevice` and prints the input devices macOS exposes to PortAudio.
+
+`python main.py record` runs the batch pipeline end to end: record audio, write a `.wav` file, transcribe it, write the raw transcript, format the transcript through the configured OpenAI-compatible endpoint, and write Markdown notes.
 
 ## High-Level Pipeline
 
@@ -25,7 +38,7 @@ ZeroScribe uses a four-stage pipeline:
 3. Transcribe the file with MLX Whisper.
 4. Format the transcript with a local LLM through LM Studio.
 
-In practice, the first prototype will likely run this flow in batches: record a fixed duration, write a temporary file, transcribe it, format it, and save the final Markdown output. Streaming can come later once the basic path is reliable.
+The current implementation runs this flow in batches. It records 10 seconds of mono audio at 16 kHz, writes the audio to disk, transcribes the saved file, formats the transcript, and saves the final Markdown output. Streaming can come later once the basic path is reliable.
 
 ## Data Flow
 
@@ -42,7 +55,7 @@ numpy array of audio samples
 scipy.io.wavfile
         |
         v
-local .wav file
+audio/<timestamp>_recording.wav
         |
         v
 mlx-whisper
@@ -51,19 +64,22 @@ mlx-whisper
 raw transcript text
         |
         v
+transcripts/<timestamp>_transcript.md
+        |
+        v
 LM Studio local server
         |
         v
-clean Markdown notes
+notes/<timestamp>_notes.md
 ```
 
 ## Core Components
 
 ### Audio Capture
 
-The capture layer is responsible for opening an audio input stream and collecting raw samples. The planned library for this layer is `sounddevice`, which provides access to macOS audio devices through PortAudio.
+The capture layer is responsible for opening an audio input stream and collecting raw samples. The current library for this layer is `sounddevice`, which provides access to macOS audio devices through PortAudio.
 
-For the initial prototype, microphone input is the simplest path. System audio capture requires an extra routing step because macOS does not expose application output as a normal microphone source by default. BlackHole can provide that missing virtual device.
+The current CLI records from the default input device. System audio capture requires an extra routing step because macOS does not expose application output as a normal microphone source by default. BlackHole can provide that missing virtual device, but the setup guide has not been implemented yet.
 
 ### Audio Buffering
 
@@ -73,13 +89,21 @@ This layer should stay intentionally thin. It should normalize shape, sample rat
 
 ### File Serialization
 
-The first transcription path will write audio to a `.wav` file using `scipy.io.wavfile`. This adds a small disk step, but it keeps the integration with Whisper straightforward and easier to debug.
+The current transcription path writes audio to a `.wav` file using `scipy.io.wavfile`. This adds a small disk step, but it keeps the integration with Whisper straightforward and easier to debug.
 
 A file-based handoff also makes failures easier to inspect. If transcription output looks wrong, the saved audio file can be replayed independently before investigating the model layer.
 
+Files are written relative to the current working directory:
+
+- `audio/<timestamp>_recording.wav`
+- `transcripts/<timestamp>_transcript.md`
+- `notes/<timestamp>_notes.md`
+
+The output directories are created automatically by `python main.py record`.
+
 ### Local Transcription
 
-The transcription layer will use `mlx-whisper`, with `mlx-community/whisper-large-v3-turbo` as the initial model target.
+The transcription layer uses `mlx-whisper`, with the model selected by `WHISPER_MODEL`. The expected initial model is `mlx-community/whisper-large-v3-turbo`.
 
 MLX is a good fit for Apple Silicon because it can use unified memory efficiently. That matters for ZeroScribe because the same machine may also be running a local LLM at the same time.
 
@@ -87,9 +111,19 @@ The transcription output should be treated as an intermediate artifact. It shoul
 
 ### Local Note Formatting
 
-The formatting layer sends the transcript to a local LLM served by LM Studio. LM Studio exposes an OpenAI-compatible local endpoint, commonly at `http://localhost:1234/v1`.
+The formatting layer sends the transcript to an OpenAI-compatible endpoint configured by `OPENAI_BASE_URL`. The intended endpoint is a local LM Studio server, commonly at `http://localhost:1234/v1`.
 
 Using the official `openai` Python SDK against that local endpoint keeps the integration conventional while avoiding hosted API calls. The SDK is used as a client library; the model itself still runs locally.
+
+The formatter is configured by:
+
+- `OPENAI_MODEL`
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+
+`OPENAI_API_KEY` is required by the OpenAI client. For LM Studio, a placeholder value such as `lm-studio` is usually enough.
+
+The CLI validates the formatter endpoint before sending transcript text. It allows local hosts by default: `localhost`, `127.0.0.1`, `::1`, and `0.0.0.0`. Non-local endpoints are refused unless `ZEROSCRIBE_ALLOW_REMOTE_LLM=1` is set intentionally.
 
 The formatting prompt should ask the model to preserve meaning and avoid inventing details. A good first output format is:
 
@@ -100,7 +134,20 @@ The formatting prompt should ask the model to preserve meaning and avoid inventi
 - Technical notes
 - Raw transcript, optionally collapsed or stored separately
 
-## Planned Dependencies
+## Runtime Configuration
+
+Set these environment variables before running the CLI:
+
+```bash
+export WHISPER_MODEL="mlx-community/whisper-large-v3-turbo"
+export OPENAI_MODEL="google/gemma-4-26b-a4b"
+export OPENAI_BASE_URL="http://localhost:1234/v1"
+export OPENAI_API_KEY="lm-studio"
+```
+
+The code includes local development defaults for these values, but the project treats them as required runtime configuration so model and endpoint choices stay explicit.
+
+## Dependencies
 
 ### `sounddevice`
 
@@ -146,27 +193,34 @@ If Python raises `FileNotFoundError: [Errno 2] No such file or directory: 'ffmpe
 
 ### BlackHole
 
-Role: system audio routing.
+Role: future system audio routing.
 
-BlackHole is a virtual macOS audio driver. It can route meeting audio or application output into an input device that `sounddevice` can capture. This is useful for recording both the user's microphone and the other side of a call, though device setup should be documented carefully.
+BlackHole is a virtual macOS audio driver. It can route meeting audio or application output into an input device that `sounddevice` can capture. This will be useful for recording both the user's microphone and the other side of a call, but the current CLI only implements direct input-device recording.
 
 ## Prototype Milestones
 
-The first version should be built in small, verifiable steps:
+The first version has completed the core batch path:
 
-1. List available audio input devices.
-2. Record a fixed-duration microphone sample.
+1. List available audio input devices with `python main.py list-devices`.
+2. Record a fixed-duration microphone sample with `python main.py record`.
 3. Save the recording to a local `.wav` file.
 4. Transcribe the saved file with MLX Whisper.
-5. Send the transcript to LM Studio for Markdown formatting.
-6. Save the Markdown output to a local notes folder.
-7. Add BlackHole setup notes for system audio capture.
+5. Save the raw transcript to a local transcripts folder.
+6. Send the transcript to LM Studio for Markdown formatting.
+7. Save the Markdown output to a local notes folder.
 
 Each milestone should leave behind something inspectable: a device list, an audio file, a transcript, or a Markdown note.
 
+Still pending:
+
+- Configurable duration, sample rate, and device selection.
+- BlackHole setup notes for system audio capture.
+- A dependency file or install script.
+- Automated tests for pure logic that does not require a microphone, local model, or LM Studio.
+
 ## Development Notes
 
-Keep the first implementation boring on purpose. A small command-line script with clear functions will be easier to validate than an early GUI or background service.
+Keep the implementation boring on purpose. A small command-line script with clear functions is easier to validate than an early GUI or background service.
 
 Suggested module boundaries once the script grows:
 
