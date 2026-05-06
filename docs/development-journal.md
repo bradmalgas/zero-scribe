@@ -530,6 +530,60 @@ The honest conclusion:
 - The source-normalization mixer was removed from live code.
 - The next architecture direction should probably be dual-stem capture and timestamped transcription, not more hand-tuned audio mixing.
 
+## First Meeting Mode Pass
+
+The next implementation step was to turn the dual-stem idea into a rough working mode.
+
+The target transcript format was:
+
+```text
+[00:00:03 - 00:00:06] User: I think we should refactor the audio capture first.
+[00:00:05 - 00:00:09] System: Yeah, the current setup is hard to debug.
+[00:00:12 - 00:00:17] User: Let's keep raw stems for auditability.
+```
+
+The first attempt added a `transcribeMeeting()` function that:
+
+1. Transcribes the mic stem.
+2. Transcribes the system stem.
+3. Labels mic segments as `User`.
+4. Labels system segments as `System`.
+5. Sorts all segments by timestamp.
+6. Returns a timestamped transcript for the normal notes formatter.
+
+That was the right product shape, but the first wiring pass had four bugs:
+
+- `record` always called meeting transcription, even for normal single-file recordings.
+- Stem export generated a fresh timestamp internally, so the files written by `audio.py` did not match the files `main.py` tried to transcribe.
+- The system transcription accidentally pointed at the mic file, duplicating the user's audio and labelling the second copy as `System`.
+- Transcript lines were concatenated without newlines, making the output hard to read.
+
+The fix was to make recording mode explicit:
+
+```bash
+python main.py record --mode normal --device 6 --duration 10
+python main.py record --mode meeting --device 9 --duration 10
+```
+
+`normal` remains the default. It records one preview WAV, transcribes that file, formats notes, and preserves the original simple path.
+
+`meeting` forces stem export, verifies that both mic and system stem files exist, then transcribes:
+
+```text
+*_recording_mic.wav    -> User segments
+*_recording_system.wav -> System segments
+```
+
+This is intentionally not full speaker diarization. `System` still means "the BlackHole/system audio stem", which may contain one remote speaker, multiple meeting participants, browser audio, or whatever macOS routed into BlackHole. The useful improvement is that the user's mic and the system audio are now separated before transcription instead of mixed into one fragile WAV.
+
+At this point, the meeting command for the tested setup is:
+
+```bash
+python main.py record --mode meeting --device 9 --duration 10
+```
+
+That assumes device `9` is the Aggregate Device with the microphone first and `BlackHole 2ch` as the next two channels.
+
 ## Current State
 
 ZeroScribe has moved beyond the original scaffold.
@@ -546,20 +600,26 @@ It now has:
 - Multi-channel aggregate-device recording.
 - Separate mic/system stem artifacts through `--save-stems`.
 - A simple preview recording artifact for the existing single-file transcription path.
+- A first-pass `--mode meeting` path that transcribes mic/system stems separately and merges timestamped segments with `User` and `System` labels.
 
-The meeting capture path has reset away from mixed-WAV tuning:
+The meeting capture path has reset away from mixed-WAV tuning and now points toward explicit modes:
 
 ```text
-Multi-Output Device -> BlackHole -> Aggregate Device -> ZeroScribe -> preview WAV + mic/system stems
+normal:
+input device -> preview WAV -> Whisper -> transcript -> notes
+
+meeting:
+Aggregate Device -> preview WAV + mic/system stems -> separate Whisper calls -> timestamped transcript -> notes
 ```
 
-The next technical question is how to transcribe `*_mic.wav` and `*_system.wav` separately, merge Whisper timestamp segments, and send that merged transcript to the local formatter.
+The next technical question is how well this timestamp merge works on real meeting audio, especially with overlap, silence, and remote speakers talking over the user's mic.
 
 ## Open Follow-Ups
 
 - Test Aggregate Device capture while wearing headphones.
 - Confirm whether channel 0 is always the microphone on the current Aggregate Device.
 - Add tests for pure functions like endpoint validation, output path generation, and stem artifact naming.
-- Explore dual-stem transcription: mic stem and system stem transcribed separately, then merged by timestamps.
+- Test `python main.py record --mode meeting --device 9 --duration 10` against real mic plus BlackHole input.
+- Decide whether `System` should eventually become `Meeting` or `Remote` in user-facing output.
 - Add a dependency file or install script.
 - Keep the BlackHole guide updated if the official download flow changes.
