@@ -38,7 +38,7 @@ def listAudioDevices():
     print("---------------------\n")
 
 #  2. Record a fixed-duration microphone sample. + 3. Save the recording to a local .wav file.
-def recordAudio(audioFilename: Path, duration=None, device=None, save_stems=False):
+def recordAudio(audioFilename: Path, duration=None, device=None, save_stems=False, stem_paths=None):
     sd = importSoundDevice()
     duration = duration or RECORDING_SECONDS
     device_info = getInputDeviceInfo(sd, device)
@@ -60,7 +60,7 @@ def recordAudio(audioFilename: Path, duration=None, device=None, save_stems=Fals
         sd.wait() # Wait until recording is finished
         artifacts = buildAudioArtifacts(myrecording)
         if save_stems:
-            exportStemArtifacts(artifacts, audioFilename, sample_rate)
+            exportStemArtifacts(artifacts, audioFilename, sample_rate, stem_paths=stem_paths)
     except Exception as exc:
         raise RuntimeError(
             "Could not record audio. Check microphone permissions, the selected input "
@@ -110,11 +110,21 @@ def buildAudioArtifacts(recording):
 
     return artifacts
 
-def exportStemArtifacts(artifacts: dict[str, object], audioFilename: Path, sample_rate: int):
+def exportStemArtifacts(
+    artifacts: dict[str, object],
+    audioFilename: Path,
+    sample_rate: int,
+    stem_paths: dict[str, Path] | None = None
+):
     for label, audio in artifacts.items():
         if label == "preview":
             continue
-        exportAudio(audio, stemAudioPath(audioFilename, label), sample_rate)
+        output_path = (
+            stem_paths[label]
+            if stem_paths and label in stem_paths
+            else stemAudioPath(audioFilename, label)
+        )
+        exportAudio(audio, output_path, sample_rate)
 
 def stemAudioPath(audioFilename: Path, label: str) -> Path:
     return audioFilename.with_name(f"{audioFilename.stem}_{label}{audioFilename.suffix}")
