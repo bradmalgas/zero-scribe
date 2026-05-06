@@ -1,0 +1,43 @@
+import os
+from pathlib import Path
+
+# Configuration
+SAMPLE_RATE = 16000
+RECORDING_SECONDS = 10
+AUDIO_DIR = Path("audio")
+NOTES_DIR = Path("notes")
+TRANSCRIPTS_DIR = Path("transcripts")
+
+WHISPER_MODEL = os.getenv(
+    "WHISPER_MODEL",
+    "mlx-community/whisper-large-v3-turbo",
+)
+OPENAI_MODEL = os.getenv(
+    "OPENAI_MODEL",
+    "google/gemma-4-26b-a4b"
+)
+BASE_URL = os.getenv(
+    "OPENAI_BASE_URL",
+    "http://localhost:1234/v1",
+)
+API_KEY = os.getenv(
+    "OPENAI_API_KEY",
+    "lm-studio",
+)
+
+SYSTEM_PROMPT = f"""You are a ZeroScribe an audio transcription helper. You take in a text-only audio transcription and convert it into a markdown file.
+
+The output format is:
+# Title
+# Summary
+# Decisions
+# Action items
+# Open questions
+# Technical notes
+
+Rules:
+1. Always preserve meaning and avoid inventing details
+2. Put "None captured" when there are no decisions/actions/questions.
+3. Never create an action item unless the transcript says one.
+"""
+

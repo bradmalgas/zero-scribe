@@ -4,7 +4,7 @@ This document describes the current technical architecture for ZeroScribe: a loc
 
 The core idea is to keep the audio pipeline simple and auditable. Audio is captured locally, serialized into a format the transcription model can read, transcribed by an MLX Whisper model, and then formatted by a local language model served through LM Studio.
 
-The first CLI pass is implemented in `main.py`. It supports listing input devices and running a fixed-duration record-to-notes batch pipeline.
+The first CLI pass is implemented in `main.py`. It supports health checks, listing input devices, recording input audio, and transcribing existing audio files.
 
 ## System Goals
 
@@ -12,22 +12,28 @@ The current version of ZeroScribe is built around five practical goals:
 
 - Run without cloud transcription or hosted LLM APIs.
 - Work well on Apple Silicon by using MLX-backed models where possible.
-- Support microphone capture first, with system audio capture through a virtual audio driver left for a later setup guide.
+- Support microphone capture first, with system audio capture through a virtual audio driver documented separately.
 - Produce Markdown notes that are easier to read than a raw transcript.
 - Keep the implementation small enough for a developer to understand, debug, and replace piece by piece.
 
 ## Current CLI Surface
 
-ZeroScribe exposes two commands:
+ZeroScribe exposes four commands:
 
 ```bash
+python main.py health
 python main.py list-devices
 python main.py record
+python main.py transcribe audio/example_recording.wav
 ```
+
+`python main.py health` prints a readiness report for system and Python dependencies, audio input visibility, output folder writability, MLX Whisper imports, LM Studio availability, and the local-first formatter endpoint policy.
 
 `python main.py list-devices` loads `sounddevice` and prints the input devices macOS exposes to PortAudio.
 
-`python main.py record` runs the batch pipeline end to end: record audio, write a `.wav` file, transcribe it, write the raw transcript, format the transcript through the configured OpenAI-compatible endpoint, and write Markdown notes.
+`python main.py record` runs the batch pipeline end to end: record audio, write a preview `.wav` file, transcribe it, write the raw transcript, format the transcript through the configured OpenAI-compatible endpoint, and write Markdown notes. It accepts `--duration` and `--device` for lightweight CLI control. When recording a multi-channel Aggregate Device, `--save-stems` writes separate mic/system WAV artifacts for future dual-stem transcription work.
+
+`python main.py transcribe audio/example_recording.wav` transcribes an existing audio file and prints the raw transcript.
 
 ## High-Level Pipeline
 
@@ -38,7 +44,7 @@ ZeroScribe uses a four-stage pipeline:
 3. Transcribe the file with MLX Whisper.
 4. Format the transcript with a local LLM through LM Studio.
 
-The current implementation runs this flow in batches. It records 10 seconds of mono audio at 16 kHz, writes the audio to disk, transcribes the saved file, formats the transcript, and saves the final Markdown output. Streaming can come later once the basic path is reliable.
+The current implementation runs this flow in batches. It records from the selected input device using that device's input channel count and default sample rate, writes a preview audio file to disk, transcribes the saved file, formats the transcript, and saves the final Markdown output. Streaming can come later once the basic path is reliable.
 
 ## Data Flow
 
@@ -79,7 +85,9 @@ notes/<timestamp>_notes.md
 
 The capture layer is responsible for opening an audio input stream and collecting raw samples. The current library for this layer is `sounddevice`, which provides access to macOS audio devices through PortAudio.
 
-The current CLI records from the default input device. System audio capture requires an extra routing step because macOS does not expose application output as a normal microphone source by default. BlackHole can provide that missing virtual device, but the setup guide has not been implemented yet.
+The current CLI records from the selected input device, or the default input device when no `--device` value is passed. System audio capture requires an extra routing step because macOS does not expose application output as a normal microphone source by default. BlackHole can provide that missing virtual device, and the setup notes live in [BlackHole Setup](./docs/blackhole-setup.md).
+
+When `--save-stems` is used with a multi-channel Aggregate Device, ZeroScribe keeps the source streams inspectable by writing separate mic and system artifacts next to the preview recording.
 
 ### Audio Buffering
 
@@ -96,6 +104,8 @@ A file-based handoff also makes failures easier to inspect. If transcription out
 Files are written relative to the current working directory:
 
 - `audio/<timestamp>_recording.wav`
+- `audio/<timestamp>_recording_mic.wav`, when `--save-stems` is used with a mic channel.
+- `audio/<timestamp>_recording_system.wav`, when `--save-stems` is used with system channels.
 - `transcripts/<timestamp>_transcript.md`
 - `notes/<timestamp>_notes.md`
 
@@ -193,9 +203,9 @@ If Python raises `FileNotFoundError: [Errno 2] No such file or directory: 'ffmpe
 
 ### BlackHole
 
-Role: future system audio routing.
+Role: system audio routing setup.
 
-BlackHole is a virtual macOS audio driver. It can route meeting audio or application output into an input device that `sounddevice` can capture. This will be useful for recording both the user's microphone and the other side of a call, but the current CLI only implements direct input-device recording.
+BlackHole is a virtual macOS audio driver. It can route meeting audio or application output into an input device that `sounddevice` can capture. Setup notes live in [BlackHole Setup](./docs/blackhole-setup.md). The current CLI can select BlackHole or an Aggregate Device as an input. The project is moving toward separate mic/system stems rather than trying to perfect a single mixed meeting WAV.
 
 ## Prototype Milestones
 
@@ -213,8 +223,9 @@ Each milestone should leave behind something inspectable: a device list, an audi
 
 Still pending:
 
-- Configurable duration, sample rate, and device selection.
-- BlackHole setup notes for system audio capture.
+- Configurable sample rate.
+- Dual-stem transcription for mic and system artifacts.
+- Timestamp merging for separately transcribed mic/system segments.
 - A dependency file or install script.
 - Automated tests for pure logic that does not require a microphone, local model, or LM Studio.
 
