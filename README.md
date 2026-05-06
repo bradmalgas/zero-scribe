@@ -58,9 +58,12 @@ ZeroScribe now has a working first CLI pass in `main.py`.
 Available commands:
 
 ```bash
+python main.py health
 python main.py list-devices
 python main.py record
 ```
+
+`python main.py health` prints a doctor-style readiness report for local dependencies, audio access, writable output folders, MLX Whisper, LM Studio, and the local-first formatter endpoint policy.
 
 `python main.py list-devices` prints the available input devices detected through `sounddevice`.
 

@@ -21,9 +21,12 @@ The current version of ZeroScribe is built around five practical goals:
 ZeroScribe exposes two commands:
 
 ```bash
+python main.py health
 python main.py list-devices
 python main.py record
 ```
+
+`python main.py health` prints a doctor-style readiness report for system and Python dependencies, audio input visibility, output folder writability, MLX Whisper imports, LM Studio availability, and the local-first formatter endpoint policy.
 
 `python main.py list-devices` loads `sounddevice` and prints the input devices macOS exposes to PortAudio.
 
