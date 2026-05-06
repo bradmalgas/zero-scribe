@@ -1,2 +1,14 @@
 .DS_Store
 .env
+venv/
+__pycache__/
+*.pyc
+
+# Local directory storing raw audio
+audio/
+
+# Local directory storing transcribed notes
+notes/
+
+# Local directory storing raw transcripts
+transcripts/
