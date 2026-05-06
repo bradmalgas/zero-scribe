@@ -38,7 +38,7 @@ The current CLI is centered on tools that can run on a Mac without external API 
 - `sounddevice`, `numpy`, and `scipy` for microphone capture and `.wav` writing.
 - `openai` as a client library pointed at the local LM Studio endpoint.
 
-BlackHole system-audio routing is still a future setup path. The implemented capture path records from the active microphone/input device exposed to macOS.
+BlackHole system-audio routing setup is documented in [BlackHole Setup](./docs/blackhole-setup.md). The implemented capture path records from the selected input device exposed to macOS.
 
 ## Who It Is For
 
@@ -61,21 +61,27 @@ Available commands:
 python main.py health
 python main.py list-devices
 python main.py record
+python main.py record --duration 5
+python main.py record --duration 5 --device 3
+python main.py record --duration 5 --device 9 --save-stems
+python main.py transcribe audio/example_recording.wav
 ```
 
-`python main.py health` prints a doctor-style readiness report for local dependencies, audio access, writable output folders, MLX Whisper, LM Studio, and the local-first formatter endpoint policy.
+`python main.py health` prints a readiness report for local dependencies, audio access, writable output folders, MLX Whisper, LM Studio, and the local-first formatter endpoint policy.
 
 `python main.py list-devices` prints the available input devices detected through `sounddevice`.
 
-`python main.py record` runs the current batch pipeline:
+`python main.py record` runs the current batch pipeline. `--duration` changes the recording length in seconds, and `--device` selects the input device index printed by `list-devices`. `--save-stems` writes separate mic/system WAV artifacts when recording a multi-channel aggregate device.
 
 1. Create output folders if needed.
-2. Record 10 seconds of mono microphone audio at 16 kHz.
-3. Save the recording to `audio/`.
+2. Record input audio from the selected device.
+3. Save a preview recording to `audio/`.
 4. Transcribe the `.wav` file with `mlx-whisper`.
 5. Save the raw transcript to `transcripts/`.
 6. Format the transcript through the configured OpenAI-compatible endpoint.
 7. Save the cleaned Markdown note to `notes/`.
+
+`python main.py transcribe audio/example_recording.wav` transcribes an existing audio file and prints the raw transcript.
 
 ## Local Setup
 
@@ -172,3 +178,5 @@ Users are still responsible for local file permissions, backups, disk encryption
 ## Project Documents
 
 - [Architecture and Tech Stack](./ZeroScribe_Architecture.md) explains the current developer-facing pipeline, dependencies, and design decisions.
+- [BlackHole Setup](./docs/blackhole-setup.md) explains macOS system-audio routing for future meeting capture.
+- [Development Journal](./docs/development-journal.md) captures implementation notes, failed tests, setup discoveries, and architecture pivots.
