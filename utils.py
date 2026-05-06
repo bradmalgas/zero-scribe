@@ -337,3 +337,10 @@ def _print_health_report(checks: list[HealthCheck]):
         )
     else:
         print("ZeroScribe is ready for the local record-to-notes pipeline.")
+
+def format_time(seconds):
+    """Converts seconds into HH:MM:SS format."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
