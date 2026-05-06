@@ -26,16 +26,16 @@ def start():
 def main():
     parser = argparse.ArgumentParser(description="ZeroScribe is a local transcription CLI tool that turns raw audio into meaningful notes")
 
-    parser.add_argument(
-        "tool",
-        choices=["health", "list-devices", "record"],
-        help="The tool to use",
-    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("health", help="A health check to ensure the Python virtual environment is ready for ZeroScribe")
+    subparsers.add_parser("list-devices", help="Lists the available input devices")
+    subparsers.add_parser("record", help="Allows recording audio for transcription")
 
     args = parser.parse_args()
 
     try:
-        match args.tool:
+        match args.command:
             case "health":
                 if not health():
                     raise SystemExit(1)
