@@ -9,12 +9,12 @@ from transcription import exportTranscript, transcribeAudio
 from utils import fail, health
 
 
-def start(duration=None, device=None):
+def start(duration=None, device=None, save_stems=False):
     ensureOutputDirs()
     validateFormatterEndpoint(BASE_URL)
     output_paths = buildOutputPaths()
 
-    recordAudio(output_paths["audio"], duration, device)
+    recordAudio(output_paths["audio"], duration, device, save_stems=save_stems)
     transcript = transcribeAudio(output_paths["audio"])
     exportTranscript(transcript, output_paths["transcript"])
     markdown = formatTranscript(transcript)
@@ -34,6 +34,7 @@ def main():
     record_parser = subparsers.add_parser("record", help="Allows recording audio for transcription")
     record_parser.add_argument("--duration", type=int, default=None, help="The length of audio to record in seconds")
     record_parser.add_argument("--device", type=int, default=None, help="The input device to use for recording")
+    record_parser.add_argument("--save-stems", action="store_true", help="Write separate mic/system WAV files next to the preview recording")
 
     transcribe_parser = subparsers.add_parser("transcribe", help="Allows transcription of existing audio files (.wav)")
     transcribe_parser.add_argument("audio_file", type=Path, help="The path to the audio file to be transcribed")
@@ -48,7 +49,7 @@ def main():
             case "list-devices":
                 listAudioDevices()
             case "record":
-                start(duration=args.duration, device=args.device)
+                start(duration=args.duration, device=args.device, save_stems=args.save_stems)
             case "transcribe":
                 transcript = transcribeAudio(args.audio_file)
                 print(transcript)
