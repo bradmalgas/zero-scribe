@@ -17,7 +17,7 @@ def importSoundDevice():
 def listAudioDevices():
     sd = importSoundDevice()
     try:
-        devices = sd.query_devices(kind='input')
+        devices = sd.query_devices()
     except Exception as exc:
         raise RuntimeError(
             "Could not list audio input devices. Check microphone permissions and "
@@ -25,7 +25,16 @@ def listAudioDevices():
         ) from exc
 
     print("\n--- Input devices ---")
-    print(devices)
+    print(f"{'Device':<7} | {'Device details':<5}")
+    for device in devices:
+        if device["max_input_channels"] <= 0:
+            continue
+
+        index = device["index"]
+        name = device["name"]
+        channels = device["max_input_channels"]
+        sample_rate = device["default_samplerate"]
+        print(f"{index:<7} | {name:<10} {channels} channel(s) {sample_rate} Hz")
     print("---------------------\n")
 
 #  2. Record a fixed-duration microphone sample. + 3. Save the recording to a local .wav file.
