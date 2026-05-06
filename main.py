@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 from audio import listAudioDevices, recordAudio
 from config import BASE_URL
 from file import buildOutputPaths, ensureOutputDirs
@@ -34,6 +35,9 @@ def main():
     record_parser.add_argument("--duration", type=int, default=None, help="The length of audio to record in seconds")
     record_parser.add_argument("--device", type=int, default=None, help="The input device to use for recording")
 
+    transcribe_parser = subparsers.add_parser("transcribe", help="Allows transcription of existing audio files (.wav)")
+    transcribe_parser.add_argument("audio_file", type=Path, help="The path to the audio file to be transcribed")
+
     args = parser.parse_args()
 
     try:
@@ -45,6 +49,9 @@ def main():
                 listAudioDevices()
             case "record":
                 start(duration=args.duration, device=args.device)
+            case "transcribe":
+                transcript = transcribeAudio(args.audio_file)
+                print(transcript)
     except RuntimeError as exc:
         fail(str(exc))
 
