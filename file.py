@@ -1,0 +1,15 @@
+from datetime import datetime
+from config import AUDIO_DIR, NOTES_DIR, TRANSCRIPTS_DIR
+
+def ensureOutputDirs():
+    for output_dir in (AUDIO_DIR, NOTES_DIR, TRANSCRIPTS_DIR):
+        output_dir.mkdir(exist_ok=True)
+
+
+def buildOutputPaths():
+    now = datetime.now().isoformat()
+    return {
+        "audio": AUDIO_DIR / f"{now}_recording.wav",
+        "notes": NOTES_DIR / f"{now}_notes.md",
+        "transcript": TRANSCRIPTS_DIR / f"{now}_transcript.md",
+    }
