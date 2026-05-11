@@ -8,15 +8,16 @@ from notes import exportMarkdown
 from transcription import exportCaptions, exportTranscript, transcribeAudio, transcribeMeeting, transcribeVideo
 from utils import fail, health
 
-def autoCaptions(videoFilePath: Path, format=None):
+def autoCaptions(videoFilePath: Path, output_format="srt"):
     ensureOutputDirs()
     output_paths = buildOutputPaths()
 
     video_segments = transcribeVideo(videoFilePath)
 
-    captions = formatCaptions(video_segments)
+    captions = formatCaptions(video_segments, output_format)
 
-    exportCaptions(captions, output_paths["captions"], format)
+    caption_path = exportCaptions(captions, output_paths["captions"], output_format)
+    print("Captions:", caption_path)
 
 
 def start(duration=None, device=None, mode="normal", save_stems=False):
@@ -80,7 +81,7 @@ def main():
     transcribe_parser.add_argument("audio_file", type=Path, help="The path to the audio file to be transcribed")
 
     video_parser = subparsers.add_parser("captions", help="Allows the transcriptions of video files and outputs either an .SRT or .VTT file")
-    video_parser.add_argument("video_file", type=Path, help="The path to the audio file to be transcribed")
+    video_parser.add_argument("video_file", type=Path, help="The path to the video or audio file to caption")
     video_parser.add_argument("--format", choices=["srt", "vtt"], default="srt", help="The output format type")
 
     args = parser.parse_args()
@@ -98,7 +99,7 @@ def main():
                 transcript = transcribeAudio(args.audio_file)
                 print(transcript)
             case "captions":
-                autoCaptions(videoFilePath=args.video_file, format=args.format)
+                autoCaptions(videoFilePath=args.video_file, output_format=args.format)
     except RuntimeError as exc:
         fail(str(exc))
 
