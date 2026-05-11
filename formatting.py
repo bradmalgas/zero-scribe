@@ -89,7 +89,7 @@ def formatCaptions(captions: dict[str, str | list], output_format="srt") -> str:
             f"{float_to_timestamp(start, timestamp_separator)} --> "
             f"{float_to_timestamp(end, timestamp_separator)}"
         )
-        transcript_lines.append(text)
+        transcript_lines.extend(wrapCaptionText(text))
         transcript_lines.append("")
 
     return "\n".join(transcript_lines)
@@ -100,3 +100,21 @@ def float_to_timestamp(total_seconds, separator=","):
     minutes, remainder = divmod(remainder, 60000)
     seconds, milliseconds = divmod(remainder, 1000)
     return f"{hours:02}:{minutes:02}:{seconds:02}{separator}{milliseconds:03}"
+
+def wrapCaptionText(text: str) -> list[str]:
+    lines = []
+    current_line = ""
+
+    for word in text.split():
+        candidate_line = f"{current_line} {word}".strip()
+        if len(candidate_line) <= 42:
+            current_line = candidate_line
+        else:
+            if current_line:
+                lines.append(current_line)
+            current_line = word
+
+    if current_line:
+        lines.append(current_line)
+
+    return lines
