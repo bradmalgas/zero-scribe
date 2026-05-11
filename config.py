@@ -7,6 +7,7 @@ RECORDING_SECONDS = 10
 AUDIO_DIR = Path("audio")
 NOTES_DIR = Path("notes")
 TRANSCRIPTS_DIR = Path("transcripts")
+CAPTIONS_DIR = Path("captions")
 
 WHISPER_MODEL = os.getenv(
     "WHISPER_MODEL",
