@@ -65,9 +65,13 @@ def formatTranscript(transcript: str) -> str:
     return markdown
 
 
-def formatCaptions(captions: dict[str, str | list]) -> str:
+def formatCaptions(captions: dict[str, str | list], output_format="srt") -> str:
     transcript_lines = []
     line_number = 1
+    timestamp_separator = "," if output_format == "srt" else "."
+
+    if output_format == "vtt":
+        transcript_lines.extend(["WEBVTT", ""])
 
     for segment in captions.get("segments", []):
         text = segment.get("text", "").strip()
@@ -77,17 +81,22 @@ def formatCaptions(captions: dict[str, str | list]) -> str:
         if not text or start is None or end is None or end <= start:
             continue
 
-        transcript_lines.append(str(line_number))
-        transcript_lines.append(f"{float_to_timestamp(start)} --> {float_to_timestamp(end)}")
+        if output_format == "srt":
+            transcript_lines.append(str(line_number))
+            line_number += 1
+
+        transcript_lines.append(
+            f"{float_to_timestamp(start, timestamp_separator)} --> "
+            f"{float_to_timestamp(end, timestamp_separator)}"
+        )
         transcript_lines.append(text)
         transcript_lines.append("")
-        line_number += 1
 
     return "\n".join(transcript_lines)
 
-def float_to_timestamp(total_seconds):
+def float_to_timestamp(total_seconds, separator=","):
     total_ms = max(0, int(round(total_seconds * 1000)))
     hours, remainder = divmod(total_ms, 3600000)
     minutes, remainder = divmod(remainder, 60000)
     seconds, milliseconds = divmod(remainder, 1000)
-    return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
+    return f"{hours:02}:{minutes:02}:{seconds:02}{separator}{milliseconds:03}"
