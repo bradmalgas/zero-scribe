@@ -66,6 +66,7 @@ def formatTranscript(transcript: str) -> str:
 
 
 def formatCaptions(captions: dict[str, str | list], output_format="srt") -> str:
+    caption_segments = buildCaptionSegments(captions)
     transcript_lines = []
     line_number = 1
     timestamp_separator = "," if output_format == "srt" else "."
@@ -73,10 +74,10 @@ def formatCaptions(captions: dict[str, str | list], output_format="srt") -> str:
     if output_format == "vtt":
         transcript_lines.extend(["WEBVTT", ""])
 
-    for segment in captions.get("segments", []):
-        text = segment.get("text", "").strip()
-        start = segment.get("start")
-        end = segment.get("end")
+    for segment in caption_segments:
+        text = segment["text"].strip()
+        start = segment["start"]
+        end = segment["end"]
 
         if not text or start is None or end is None or end <= start:
             continue
@@ -93,6 +94,74 @@ def formatCaptions(captions: dict[str, str | list], output_format="srt") -> str:
         transcript_lines.append("")
 
     return "\n".join(transcript_lines)
+
+def buildCaptionSegments(captions: dict[str, str | list]) -> list[dict[str, str | float]]:
+    caption_segments = []
+
+    for segment in captions.get("segments", []):
+        words = segment.get("words", [])
+        if words:
+            caption_segments.extend(chunkWords(words))
+        else:
+            caption_segments.append({
+                "start": segment.get("start"),
+                "end": segment.get("end"),
+                "text": segment.get("text", "").strip(),
+            })
+
+    return caption_segments
+
+def chunkWords(words: list[dict]) -> list[dict[str, str | float]]:
+    chunks = []
+    current_words = []
+    start = None
+    end = None
+
+    for word in words:
+        text = str(word.get("word", "")).strip()
+        word_start = word.get("start")
+        word_end = word.get("end")
+        if not text or word_start is None or word_end is None:
+            continue
+
+        candidate_text = " ".join(current_words + [text])
+        candidate_start = start if start is not None else word_start
+        candidate_duration = word_end - candidate_start
+
+        if current_words and (len(candidate_text) > 84 or candidate_duration > 6):
+            chunks.append({
+                "start": start,
+                "end": end,
+                "text": " ".join(current_words),
+            })
+            current_words = [text]
+            start = word_start
+        else:
+            current_words.append(text)
+            if start is None:
+                start = word_start
+
+        end = word_end
+
+        current_text = " ".join(current_words)
+        if endsSentence(current_text) and end - start >= 1:
+            chunks.append({
+                "start": start,
+                "end": end,
+                "text": current_text,
+            })
+            current_words = []
+            start = None
+            end = None
+
+    if current_words:
+        chunks.append({
+            "start": start,
+            "end": end,
+            "text": " ".join(current_words),
+        })
+
+    return chunks
 
 def float_to_timestamp(total_seconds, separator=","):
     total_ms = max(0, int(round(total_seconds * 1000)))
@@ -118,3 +187,6 @@ def wrapCaptionText(text: str) -> list[str]:
         lines.append(current_line)
 
     return lines
+
+def endsSentence(text: str) -> bool:
+    return text.strip().endswith((".", "?", "!", "..."))
