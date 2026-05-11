@@ -2,6 +2,29 @@ from pathlib import Path
 from config import WHISPER_MODEL
 from utils import format_time
 
+def transcribeVideo(videoFile: Path) -> dict[str, str | list]:
+    try:
+        import mlx_whisper
+    except Exception as exc:
+        raise RuntimeError(
+            "Could not load mlx-whisper. On Apple Silicon this can fail if MLX cannot "
+            "access Metal, or if the virtual environment is missing dependencies."
+        ) from exc
+    
+    try:
+        result = mlx_whisper.transcribe(
+            str(videoFile),
+            path_or_hf_repo=WHISPER_MODEL,
+            word_timestamps=True
+        )
+        return result
+    except Exception as exc:
+        raise RuntimeError(
+            "Could not transcribe video with mlx-whisper. Confirm ffmpeg is installed, "
+            f"audio file exists at {videoFile}, and model {WHISPER_MODEL!r} "
+            "can be loaded on this Mac."
+        ) from exc
+
 
 def transcribeMeeting(userAudioFile: Path, systemAudioFile: Path) -> str:
     try:
@@ -100,4 +123,13 @@ def exportTranscript(transcript: str, transcriptFileName: Path):
     except OSError as exc:
         raise RuntimeError(
             f"Could not write transcript to {transcriptFileName}. Check folder permissions."
+        ) from exc
+
+def exportCaptions(captions: str, captionFileName: Path, format: str):
+    try:
+        with open(f"{captionFileName}.{format}", 'w', encoding="utf-8") as file:
+            file.write(captions)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Could not write captions to {captionFileName}.{format}. Check folder permissions."
         ) from exc
