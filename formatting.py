@@ -63,3 +63,39 @@ def formatTranscript(transcript: str) -> str:
             f"the model name {OPENAI_MODEL!r} is loaded, and the endpoint is {BASE_URL!r}."
         )
     return markdown
+
+
+# I just googled "example .SRT caption file format" and tried to recreate it
+def formatCaptions(captions: dict[str, str | list]) -> str:
+        all_segments = []
+        for segment in captions["segments"]:
+            all_segments.append({
+                "start": segment["start"],
+                "end": segment["end"],
+                "text": segment["text"].strip(),
+            })
+        transcript_lines = []
+        lineNumber = 1
+
+        for seg in all_segments:
+            transcript_lines.append(str(lineNumber))
+            transcript_lines.append(f"{float_to_timestamp(seg["start"])} --> {float_to_timestamp(seg["end"])}")
+            transcript_lines.append(f"{seg['text']}")
+            transcript_lines.append("")
+            lineNumber += 1
+
+        transcript = "\n".join(transcript_lines)
+
+        return transcript
+
+def float_to_timestamp(total_seconds):
+    # Convert everything to milliseconds and round to the nearest whole number
+    total_ms = int(round(total_seconds * 1000))
+    
+    # 3,600,000 ms in an hour, 60,000 ms in a minute, 1,000 ms in a second
+    hours, remainder = divmod(total_ms, 3600000)
+    minutes, remainder = divmod(remainder, 60000)
+    seconds, milliseconds = divmod(remainder, 1000)
+    
+    # Format with leading zeros: 2 digits for H:M:S and 3 for ms
+    return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
