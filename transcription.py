@@ -126,10 +126,12 @@ def exportTranscript(transcript: str, transcriptFileName: Path):
         ) from exc
 
 def exportCaptions(captions: str, captionFileName: Path, format: str):
+    caption_path = captionFileName.with_suffix(f".{format}")
     try:
-        with open(f"{captionFileName}.{format}", 'w', encoding="utf-8") as file:
+        with open(caption_path, 'w', encoding="utf-8") as file:
             file.write(captions)
     except OSError as exc:
         raise RuntimeError(
-            f"Could not write captions to {captionFileName}.{format}. Check folder permissions."
+            f"Could not write captions to {caption_path}. Check folder permissions."
         ) from exc
+    return caption_path
