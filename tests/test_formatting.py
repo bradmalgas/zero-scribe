@@ -1,5 +1,5 @@
 import pytest
-from formatting import float_to_timestamp, isLocalBaseUrl
+from formatting import float_to_timestamp, isLocalBaseUrl, wrapCaptionText
 
 
 # --- isLocalBaseUrl ---
@@ -42,3 +42,27 @@ def test_float_to_timestamp_negative_clamps_to_zero():
 
 def test_float_to_timestamp_vtt_separator():
     assert float_to_timestamp(1.0, ".") == "00:00:01.000"
+
+
+# --- wrapCaptionText ---
+
+def test_wrapCaptionText_empty():
+    assert wrapCaptionText("") == []
+
+def test_wrapCaptionText_short_fits_one_line():
+    assert wrapCaptionText("Hello world") == ["Hello world"]
+
+def test_wrapCaptionText_wraps_at_42_chars():
+    # 39-char word + "word" pushed to next line
+    text = "A" * 39 + " word"
+    lines = wrapCaptionText(text)
+    assert len(lines) == 2
+    assert lines[1] == "word"
+
+def test_wrapCaptionText_exactly_42_chars_stays_on_one_line():
+    assert wrapCaptionText("A" * 42) == ["A" * 42]
+
+def test_wrapCaptionText_multiple_wraps():
+    long_word = "A" * 43
+    lines = wrapCaptionText(f"{long_word} {long_word}")
+    assert lines == [long_word, long_word]
