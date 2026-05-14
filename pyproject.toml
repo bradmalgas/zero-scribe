@@ -1,0 +1,18 @@
+[project]
+name = "zero-scribe"
+version = "0.1.0"
+description = "Local-first meeting scribe and dictation assistant for Apple Silicon Macs"
+requires-python = ">=3.11"
+dependencies = [
+    "mlx-whisper",
+    "sounddevice",
+    "numpy",
+    "scipy",
+    "openai",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
