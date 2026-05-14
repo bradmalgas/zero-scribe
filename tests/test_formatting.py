@@ -1,5 +1,5 @@
 import pytest
-from formatting import float_to_timestamp, isLocalBaseUrl, wrapCaptionText
+from formatting import endsSentence, float_to_timestamp, isLocalBaseUrl, wrapCaptionText
 
 
 # --- isLocalBaseUrl ---
@@ -66,3 +66,27 @@ def test_wrapCaptionText_multiple_wraps():
     long_word = "A" * 43
     lines = wrapCaptionText(f"{long_word} {long_word}")
     assert lines == [long_word, long_word]
+
+
+# --- endsSentence ---
+
+def test_endsSentence_period():
+    assert endsSentence("Hello.") is True
+
+def test_endsSentence_question():
+    assert endsSentence("Really?") is True
+
+def test_endsSentence_exclamation():
+    assert endsSentence("Wow!") is True
+
+def test_endsSentence_ellipsis():
+    assert endsSentence("And then...") is True
+
+def test_endsSentence_no_punctuation():
+    assert endsSentence("Hello") is False
+
+def test_endsSentence_comma():
+    assert endsSentence("Hello, world") is False
+
+def test_endsSentence_strips_whitespace():
+    assert endsSentence("Hello.  ") is True
