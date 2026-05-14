@@ -3,10 +3,21 @@ from pathlib import Path
 from audio import listAudioDevices, recordAudio
 from config import BASE_URL
 from file import buildOutputPaths, ensureOutputDirs
-from formatting import formatTranscript, validateFormatterEndpoint
+from formatting import formatCaptions, formatTranscript, validateFormatterEndpoint
 from notes import exportMarkdown
-from transcription import exportTranscript, transcribeAudio, transcribeMeeting
+from transcription import exportCaptions, exportTranscript, transcribeAudio, transcribeMeeting, transcribeVideo
 from utils import fail, health
+
+def autoCaptions(videoFilePath: Path, output_format="srt"):
+    ensureOutputDirs()
+    output_paths = buildOutputPaths()
+
+    video_segments = transcribeVideo(videoFilePath)
+
+    captions = formatCaptions(video_segments, output_format)
+
+    caption_path = exportCaptions(captions, output_paths["captions"], output_format)
+    print("Captions:", caption_path)
 
 
 def start(duration=None, device=None, mode="normal", save_stems=False):
@@ -59,6 +70,7 @@ def main():
 
     subparsers.add_parser("health", help="A health check to ensure the Python virtual environment is ready for ZeroScribe")
     subparsers.add_parser("list-devices", help="Lists the available input devices")
+
     record_parser = subparsers.add_parser("record", help="Allows recording audio for transcription")
     record_parser.add_argument("--duration", type=int, default=None, help="The length of audio to record in seconds")
     record_parser.add_argument("--device", type=int, default=None, help="The input device to use for recording")
@@ -67,6 +79,10 @@ def main():
 
     transcribe_parser = subparsers.add_parser("transcribe", help="Allows transcription of existing audio files (.wav)")
     transcribe_parser.add_argument("audio_file", type=Path, help="The path to the audio file to be transcribed")
+
+    video_parser = subparsers.add_parser("captions", help="Allows the transcriptions of video files and outputs either an .SRT or .VTT file")
+    video_parser.add_argument("video_file", type=Path, help="The path to the video or audio file to caption")
+    video_parser.add_argument("--format", choices=["srt", "vtt"], default="srt", help="The output format type")
 
     args = parser.parse_args()
 
@@ -82,6 +98,8 @@ def main():
             case "transcribe":
                 transcript = transcribeAudio(args.audio_file)
                 print(transcript)
+            case "captions":
+                autoCaptions(videoFilePath=args.video_file, output_format=args.format)
     except RuntimeError as exc:
         fail(str(exc))
 

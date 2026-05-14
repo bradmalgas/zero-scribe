@@ -12,3 +12,6 @@ notes/
 
 # Local directory storing raw transcripts
 transcripts/
+
+# Local directory storing raw transcripts
+captions/
