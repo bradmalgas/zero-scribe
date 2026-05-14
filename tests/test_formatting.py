@@ -1,5 +1,5 @@
 import pytest
-from formatting import endsSentence, float_to_timestamp, isLocalBaseUrl, wrapCaptionText
+from formatting import chunkWords, endsSentence, float_to_timestamp, isLocalBaseUrl, wrapCaptionText
 
 
 # --- isLocalBaseUrl ---
@@ -90,3 +90,53 @@ def test_endsSentence_comma():
 
 def test_endsSentence_strips_whitespace():
     assert endsSentence("Hello.  ") is True
+
+
+# --- chunkWords ---
+
+def _word(text, start, end):
+    return {"word": text, "start": start, "end": end}
+
+def test_chunkWords_empty():
+    assert chunkWords([]) == []
+
+def test_chunkWords_single_word():
+    result = chunkWords([_word("hi", 0.0, 0.5)])
+    assert result == [{"start": 0.0, "end": 0.5, "text": "hi"}]
+
+def test_chunkWords_sentence_boundary_flushes_chunk():
+    words = [_word("Done.", 0.0, 1.5), _word("Next", 2.0, 2.5)]
+    result = chunkWords(words)
+    assert result[0]["text"] == "Done."
+    assert result[1]["text"] == "Next"
+
+def test_chunkWords_no_flush_before_one_second():
+    # Sentence ends but duration < 1s — stays in the same chunk
+    words = [_word("Done.", 0.0, 0.4), _word("Next", 0.5, 0.9)]
+    result = chunkWords(words)
+    assert len(result) == 1
+    assert "Done." in result[0]["text"]
+
+def test_chunkWords_long_text_triggers_new_chunk():
+    # First word is 88 chars; adding "overflow" makes candidate_text 97 chars > 84
+    words = [_word("word" * 22, 0.0, 1.0), _word("overflow", 1.1, 2.0)]
+    result = chunkWords(words)
+    assert len(result) == 2
+
+def test_chunkWords_long_duration_triggers_new_chunk():
+    # candidate_duration = 9.0 - 0.0 = 9s > 6s threshold
+    words = [_word("start", 0.0, 1.0), _word("end", 8.0, 9.0)]
+    result = chunkWords(words)
+    assert len(result) == 2
+    assert result[0]["text"] == "start"
+    assert result[1]["text"] == "end"
+
+def test_chunkWords_skips_words_missing_timestamps():
+    words = [
+        {"word": "valid", "start": 0.0, "end": 1.0},
+        {"word": "bad", "start": None, "end": 1.5},
+        {"word": "also", "start": 2.0, "end": 3.0},
+    ]
+    result = chunkWords(words)
+    combined = " ".join(c["text"] for c in result)
+    assert "bad" not in combined
