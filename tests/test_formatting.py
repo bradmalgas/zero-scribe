@@ -1,5 +1,5 @@
 import pytest
-from formatting import isLocalBaseUrl
+from formatting import float_to_timestamp, isLocalBaseUrl
 
 
 # --- isLocalBaseUrl ---
@@ -21,3 +21,24 @@ def test_isLocalBaseUrl_remote_openai():
 
 def test_isLocalBaseUrl_remote_arbitrary():
     assert isLocalBaseUrl("https://example.com/v1") is False
+
+
+# --- float_to_timestamp ---
+
+def test_float_to_timestamp_zero():
+    assert float_to_timestamp(0.0) == "00:00:00,000"
+
+def test_float_to_timestamp_seconds():
+    assert float_to_timestamp(90.0) == "00:01:30,000"
+
+def test_float_to_timestamp_hours():
+    assert float_to_timestamp(3661.5) == "01:01:01,500"
+
+def test_float_to_timestamp_milliseconds():
+    assert float_to_timestamp(0.123) == "00:00:00,123"
+
+def test_float_to_timestamp_negative_clamps_to_zero():
+    assert float_to_timestamp(-5.0) == "00:00:00,000"
+
+def test_float_to_timestamp_vtt_separator():
+    assert float_to_timestamp(1.0, ".") == "00:00:01.000"
