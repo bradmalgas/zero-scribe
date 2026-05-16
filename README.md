@@ -117,6 +117,9 @@ From a fresh clone of the repo:
 python -m venv venv
 source venv/bin/activate
 pip install mlx-whisper sounddevice numpy scipy openai
+
+# dev dependencies (for running tests)
+pip install pytest
 ```
 
 The virtual environment contains the Python libraries. `ffmpeg` stays outside the virtual environment because it is a command-line program that those libraries call through the system `PATH`.
