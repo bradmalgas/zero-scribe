@@ -9,6 +9,7 @@ dependencies = [
     "numpy",
     "scipy",
     "openai",
+    "pydantic",
 ]
 
 [project.optional-dependencies]
