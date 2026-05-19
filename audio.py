@@ -1,6 +1,11 @@
+from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+from numpy.typing import NDArray
 from config import RECORDING_SECONDS, SAMPLE_RATE
+from models import AudioOutputResult, Output, OutputKind, RecordingRequest, RecordingResult
+from utils import get_file_size
 
 def importSoundDevice():
     try:
@@ -38,36 +43,75 @@ def listAudioDevices():
     print("---------------------\n")
 
 #  2. Record a fixed-duration microphone sample. + 3. Save the recording to a local .wav file.
-def recordAudio(audioFilename: Path, duration=None, device=None, save_stems=False, stem_paths=None):
+def recordAudio(req: RecordingRequest) -> RecordingResult:
     sd = importSoundDevice()
-    duration = duration or RECORDING_SECONDS
-    device_info = getInputDeviceInfo(sd, device)
+    duration = req.duration_seconds or RECORDING_SECONDS
+    device_info = getInputDeviceInfo(sd, req.device_index)
     channels = int(device_info["max_input_channels"])
     sample_rate = int(device_info.get("default_samplerate") or SAMPLE_RATE)
+    device_name = device_info["name"]
+    mic_output = None
+    system_output = None
+    created_at = datetime.now()
 
     print(
         f"Recording {duration}s from {device_info['name']} "
         f"({channels} channel(s), {sample_rate} Hz)..."
     )
     try:
-        myrecording = sd.rec(
+        recording = sd.rec(
             int(duration * sample_rate),
             samplerate=sample_rate,
             channels=channels,
             dtype='float32',
-            device=device
+            device=req.device_index
         )
-        sd.wait() # Wait until recording is finished
-        artifacts = buildAudioArtifacts(myrecording)
-        if save_stems:
-            exportStemArtifacts(artifacts, audioFilename, sample_rate, stem_paths=stem_paths)
+        sd.wait()  # Wait until recording is finished
+        audio_outputs = buildAudioOutput(recording)
     except Exception as exc:
         raise RuntimeError(
             "Could not record audio. Check microphone permissions, the selected input "
             "device, and whether another app is blocking audio capture."
         ) from exc
     print("Recording finished. Processing...")
-    exportAudio(artifacts["preview"], audioFilename, sample_rate)
+    if req.save_split_audio:
+        if not splitAudioIsPresent(audio_outputs, req.mic_audio_output_path, req.system_audio_output_path):
+            raise RuntimeError(
+                "Could not record split audio. Use a multi-channel Aggregate Device "
+                "with the microphone first and BlackHole as the next channels, and "
+                "provide mic/system output paths."
+            )
+        exportAudio(audio_outputs.mic_audio_data, req.mic_audio_output_path, sample_rate)
+        exportAudio(audio_outputs.system_audio_data, req.system_audio_output_path, sample_rate)
+        mic_output = Output(
+            path=req.mic_audio_output_path,
+            kind=OutputKind.mic_audio,
+            created_at=created_at,
+            size_bytes=get_file_size(req.mic_audio_output_path)
+        )
+        system_output = Output(
+            path=req.system_audio_output_path,
+            kind=OutputKind.system_audio,
+            created_at=created_at,
+            size_bytes=get_file_size(req.system_audio_output_path)
+        )
+    exportAudio(audio_outputs.audio_data, req.audio_output_path, sample_rate)
+    audio_output = Output(
+        path=req.audio_output_path,
+        kind=OutputKind.audio,
+        created_at=created_at,
+        size_bytes=get_file_size(req.audio_output_path)
+    )
+
+    return RecordingResult(
+        audio_output=audio_output,
+        mic_audio_output=mic_output,
+        system_audio_output=system_output,
+        sample_rate=sample_rate,
+        channels=channels,
+        duration_seconds=duration,
+        device_name=device_name
+    )
 
 def getInputDeviceInfo(sd, device=None):
     try:
@@ -86,50 +130,41 @@ def getInputDeviceInfo(sd, device=None):
 
     return device_info
 
-def buildAudioArtifacts(recording):
-    artifacts = {}
+# Channel mapping:
+# 1 channel: microphone-only input
+# 2 channels: BlackHole/system stereo input
+# 3+ channels: Aggregate Device with mic first, BlackHole stereo next
+def buildAudioOutput(recording: NDArray[np.float32]) -> AudioOutputResult:
+    audio_outputs = AudioOutputResult()
 
     if recording.ndim == 1:
         mono = recording.astype("float32")
-        artifacts["preview"] = mono
-        artifacts["mic"] = mono
-        return artifacts
+        audio_outputs.audio_data = mono
+        audio_outputs.mic_audio_data = mono
+        audio_outputs.channels = 1
+        return audio_outputs
 
     channel_count = recording.shape[1]
-    artifacts["preview"] = recording.mean(axis=1).astype("float32")
+    audio_outputs.audio_data = recording.mean(axis=1).astype("float32")
 
     if channel_count == 1:
-        artifacts["mic"] = recording[:, 0].astype("float32")
-        return artifacts
+        audio_outputs.mic_audio_data = recording[:, 0].astype("float32")
+        audio_outputs.channels = 1
+        return audio_outputs
 
     if channel_count >= 3:
-        artifacts["mic"] = recording[:, 0].astype("float32")
-        artifacts["system"] = recording[:, 1:3].mean(axis=1).astype("float32")
+        audio_outputs.mic_audio_data = recording[:, 0].astype("float32")
+        audio_outputs.system_audio_data = recording[:, 1:3].mean(axis=1).astype("float32")
+
+        audio_outputs.channels = channel_count
     elif channel_count == 2:
-        artifacts["system"] = recording.mean(axis=1).astype("float32")
+        audio_outputs.system_audio_data = recording.mean(axis=1).astype("float32")
 
-    return artifacts
+        audio_outputs.channels = channel_count
 
-def exportStemArtifacts(
-    artifacts: dict[str, object],
-    audioFilename: Path,
-    sample_rate: int,
-    stem_paths: dict[str, Path] | None = None
-):
-    for label, audio in artifacts.items():
-        if label == "preview":
-            continue
-        output_path = (
-            stem_paths[label]
-            if stem_paths and label in stem_paths
-            else stemAudioPath(audioFilename, label)
-        )
-        exportAudio(audio, output_path, sample_rate)
+    return audio_outputs
 
-def stemAudioPath(audioFilename: Path, label: str) -> Path:
-    return audioFilename.with_name(f"{audioFilename.stem}_{label}{audioFilename.suffix}")
-
-def exportAudio(recording, audioFilename: Path, sample_rate: int):
+def exportAudio(recording: NDArray[np.float32], audioFilename: Path, sample_rate: int):
     try:
         from scipy.io.wavfile import write
     except ImportError as exc:
@@ -144,3 +179,15 @@ def exportAudio(recording, audioFilename: Path, sample_rate: int):
         raise RuntimeError(
             f"Could not write audio file to {audioFilename}. Check folder permissions."
         ) from exc
+
+def splitAudioIsPresent(
+    req: AudioOutputResult,
+    mic_audio_path: Path | None,
+    system_audio_path: Path | None,
+) -> bool:
+    return (
+        req.mic_audio_data is not None
+        and req.system_audio_data is not None
+        and mic_audio_path is not None
+        and system_audio_path is not None
+    )
