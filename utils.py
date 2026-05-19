@@ -1,10 +1,12 @@
 import importlib
 import json
+from pathlib import Path
 import socket
 import sys
 import tempfile
 import urllib.error
 import urllib.request
+import os
 from dataclasses import dataclass
 
 from config import (
@@ -344,3 +346,6 @@ def format_time(seconds):
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+def get_file_size(path: Path) -> int:
+    return os.path.getsize(path)
