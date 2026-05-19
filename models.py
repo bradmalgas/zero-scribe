@@ -1,5 +1,9 @@
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from numpy.typing import NDArray
+import numpy as np
+
 from pydantic import BaseModel
 from pathlib import Path
 
@@ -34,10 +38,13 @@ class OutputPaths(BaseModel):
 
 # --- Recording models ---
 class RecordingRequest(BaseModel):
+    audio_output_path: Path
     duration_seconds: float | None = None
     device_index: int | None = None
     mode: RecordingMode = RecordingMode.normal
     save_split_audio: bool = False
+    system_audio_output_path: Path | None = None # Required if save split audio is true
+    mic_audio_output_path: Path | None = None # Required if save split audio is true
 
 class RecordingResult(BaseModel):
     audio_output: Output
@@ -47,6 +54,13 @@ class RecordingResult(BaseModel):
     channels: int
     duration_seconds: float
     device_name: str
+
+@dataclass
+class AudioOutputResult:
+    audio_data: NDArray[np.float32] | None = None
+    system_audio_data: NDArray[np.float32] | None = None
+    mic_audio_data: NDArray[np.float32] | None = None
+    channels: int = 0
 
 # --- Transcription models ---
 class TranscriptionRequest(BaseModel):
