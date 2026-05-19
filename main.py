@@ -1,10 +1,12 @@
 import argparse
 from pathlib import Path
-from audio import listAudioDevices, recordAudio
+from audio import listAudioDevices
 from config import BASE_URL
 from file import buildOutputPaths, ensureOutputDirs
 from formatting import formatCaptions, formatTranscript, validateFormatterEndpoint
+from models import OutputPaths, RecordingRequest
 from notes import exportMarkdown
+from service import record_audio
 from transcription import exportCaptions, exportTranscript, transcribeAudio, transcribeMeeting, transcribeVideo
 from utils import fail, health
 
@@ -16,7 +18,7 @@ def autoCaptions(videoFilePath: Path, output_format="srt"):
 
     captions = formatCaptions(video_segments, output_format)
 
-    caption_path = exportCaptions(captions, output_paths["captions"], output_format)
+    caption_path = exportCaptions(captions, output_paths.captions, output_format)
     print("Captions:", caption_path)
 
 
@@ -25,33 +27,37 @@ def start(duration=None, device=None, mode="normal", save_stems=False):
     validateFormatterEndpoint(BASE_URL)
     output_paths = buildOutputPaths()
     should_save_stems = save_stems or mode == "meeting"
-
-    recordAudio(
-        output_paths["audio"],
-        duration,
-        device,
-        save_stems=should_save_stems,
-        stem_paths=output_paths
+    
+    record_audio(
+        request=RecordingRequest(
+            audio_output_path=output_paths.audio,
+            duration_seconds=duration,
+            device_index=device,
+            mode=mode,
+            save_split_audio=should_save_stems,
+            system_audio_output_path=output_paths.system,
+            mic_audio_output_path=output_paths.mic
+        )
     )
 
     if mode == "meeting":
         validateMeetingStemFiles(output_paths)
-        transcript = transcribeMeeting(output_paths["mic"], output_paths["system"])
+        transcript = transcribeMeeting(output_paths.mic, output_paths.system)
     else:
-        transcript = transcribeAudio(output_paths["audio"])
+        transcript = transcribeAudio(output_paths.audio)
 
-    exportTranscript(transcript, output_paths["transcript"])
+    exportTranscript(transcript, output_paths.transcript)
     markdown = formatTranscript(transcript)
-    exportMarkdown(markdown, output_paths["notes"])
+    exportMarkdown(markdown, output_paths.notes)
 
-    print("Audio file:", output_paths["audio"])
-    print("Transcript:", output_paths["transcript"])
-    print("Notes:", output_paths["notes"])
+    print("Audio file:", output_paths.audio)
+    print("Transcript:", output_paths.transcript)
+    print("Notes:", output_paths.notes)
 
-def validateMeetingStemFiles(output_paths):
+def validateMeetingStemFiles(output_paths: OutputPaths):
     missing_stems = [
-        label for label in ("mic", "system")
-        if not output_paths[label].exists()
+        *(["mic"] if not output_paths.mic.exists() else []),
+        *(["system"] if not output_paths.system.exists() else [])
     ]
     if not missing_stems:
         return
